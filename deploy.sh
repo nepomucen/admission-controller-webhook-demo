@@ -23,19 +23,23 @@ set -euo pipefail
 basedir="$(dirname "$0")/deployment"
 keydir="$(mktemp -d)"
 
+# Webhook server name.
+webhookname=webhook-server
+namespace=webhook-demo
+
 # Generate keys into a temporary directory.
 echo "Generating TLS keys ..."
-"${basedir}/generate-keys.sh" "$keydir"
+"${basedir}/generate-keys.sh" "$keydir" "${webhookname}" "${namespace}"
 
 # Create the `webhook-demo` namespace. This cannot be part of the YAML file as we first need to create the TLS secret,
 # which would fail otherwise.
 echo "Creating Kubernetes objects ..."
-kubectl create namespace webhook-demo
+kubectl create namespace ${namespace}
 
 # Create the TLS secret for the generated keys.
-kubectl -n webhook-demo create secret tls webhook-server-tls \
-    --cert "${keydir}/webhook-server-tls.crt" \
-    --key "${keydir}/webhook-server-tls.key"
+kubectl -n ${namespace} create secret tls "${webhookname}-tls" \
+    --cert "${keydir}/${webhookname}-tls.crt" \
+    --key "${keydir}/${webhookname}-tls.key"
 
 # Read the PEM-encoded CA certificate, base64 encode it, and replace the `${CA_PEM_B64}` placeholder in the YAML
 # template with it. Then, create the Kubernetes resources.

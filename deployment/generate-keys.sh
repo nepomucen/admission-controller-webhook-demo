@@ -23,16 +23,36 @@
 # NOTE: THIS SCRIPT EXISTS FOR DEMO PURPOSES ONLY. DO NOT USE IT FOR YOUR PRODUCTION WORKLOADS.
 
 : ${1?'missing key directory'}
+: ${2?'missing webhook server name'}
+: ${3?'missing namespace'}
 
 key_dir="$1"
+webhookservername="$2"
+namespace="$3"
 
 chmod 0700 "$key_dir"
 cd "$key_dir"
+
+cat <<EOF >> csr.conf
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+[req_distinguished_name]
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = ${webhookservername}
+DNS.2 = ${webhookservername}.${namespace}
+DNS.3 = ${webhookservername}.${namespace}.svc
+EOF
 
 # Generate the CA cert and private key
 openssl req -nodes -new -x509 -keyout ca.key -out ca.crt -subj "/CN=Admission Controller Webhook Demo CA"
 # Generate the private key for the webhook server
 openssl genrsa -out webhook-server-tls.key 2048
 # Generate a Certificate Signing Request (CSR) for the private key, and sign it with the private key of the CA.
-openssl req -new -key webhook-server-tls.key -subj "/CN=webhook-server.webhook-demo.svc" \
-    | openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -out webhook-server-tls.crt
+openssl req -new -key webhook-server-tls.key -subj "/CN=${webhookservername}.${namespace}.svc" \
+    | openssl x509 -req -CA ca.crt -CAkey ca.key -CAcreateserial -out "${webhookservername}-tls.crt" -extensions v3_req -extfile csr.conf
